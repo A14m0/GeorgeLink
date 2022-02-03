@@ -12,7 +12,7 @@ fn main() {
     let args = App::new("GeorgeLink")
             .version(crate_version!())
 			.author(crate_authors!())
-			.about("Saves each grid's percentile to a new NetCDF file")
+			.about("Secure messaging application")
 			.setting(clap::AppSettings::ArgRequiredElseHelp)
 			.arg(
 				Arg::new("server")
