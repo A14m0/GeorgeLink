@@ -1,0 +1,19 @@
+[package]
+name = "GeorgeLink"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+Backend = {path="src/Backend", version="*"}
+cfg-if = "1.0.0"
+fltk = "1.2.29"
+clap = {version="3.0.14", features=["cargo"]}
+
+[features]
+#default = ["server"]
+#server = []
+#client = []
+#fltk-client = ["client"]
+#ncurses-client = ["client"]
