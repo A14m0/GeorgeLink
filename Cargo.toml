@@ -6,10 +6,12 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-Backend = {path="src/Backend", version="*"}
 cfg-if = "1.0.0"
 fltk = "1.2.29"
 clap = {version="3.0.14", features=["cargo"]}
+rustls = "0.20.2"
+rustls-pemfile = "0.2.1"
+colored = "2.0.0"
 
 [features]
 #default = ["server"]

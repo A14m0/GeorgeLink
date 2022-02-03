@@ -1,7 +1,12 @@
+extern crate rustls;
+
+
 mod server;
 mod client;
-use server::server::server_main;
+mod log;
+use server::Server;
 use client::client::client_main;
+use log::{LogType, log};
 
 use clap::{Arg, App, crate_authors, crate_version};
 
@@ -33,7 +38,7 @@ fn main() {
     // handle the split between server and client
     if args.is_present("server") {
         // run the server
-        server_main();
+        //server_main();
     } else if args.is_present("client") {
         // run the client
         client_main();
