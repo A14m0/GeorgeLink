@@ -1,6 +1,6 @@
 extern crate rustls;
 
-
+mod keygen;
 mod server;
 mod client;
 mod log;
@@ -39,6 +39,9 @@ fn main() {
     if args.is_present("server") {
         // run the server
         //server_main();
+        let mut s = Server::new("example_keys/cert.pem", "example_keys/key.pem");//, "example_keys/root.crt");
+        s.accept().unwrap();
+        s.run();
     } else if args.is_present("client") {
         // run the client
         client_main();
