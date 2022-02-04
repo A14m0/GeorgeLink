@@ -3,10 +3,14 @@ extern crate rustls;
 mod keygen;
 mod server;
 mod client;
+mod common;
 mod log;
-use server::Server;
-use client::client::client_main;
+mod frontend;
+
+use server::server_main;
+use client::client_main;
 use log::{LogType, log};
+
 
 use clap::{Arg, App, crate_authors, crate_version};
 
@@ -38,13 +42,12 @@ fn main() {
     // handle the split between server and client
     if args.is_present("server") {
         // run the server
-        //server_main();
-        let mut s = Server::new("example_keys/cert.pem", "example_keys/key.pem");//, "example_keys/root.crt");
-        s.accept().unwrap();
-        s.run();
+        server_main();//"example_keys/cert.pem", "example_keys/key.pem");//, "example_keys/root.crt");
+        
     } else if args.is_present("client") {
         // run the client
-        client_main();
+        let addr: std::net::SocketAddr = "127.0.0.1:2701".parse().unwrap(); 
+        client_main("tester", addr, "localhost", "example_keys/ecdsa/ca.cert", "example_keys/ecdsa/client.req", "example_keys/ecdsa/client.key");
     } else {
         // bail
         println!("[-] Please run with either `client` or `server`");
