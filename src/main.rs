@@ -6,6 +6,7 @@ mod client;
 mod common;
 mod log;
 mod frontend;
+mod console;
 
 use server::server_main;
 use client::client_main;
@@ -46,8 +47,8 @@ fn main() {
         
     } else if args.is_present("client") {
         // run the client
-        let addr: std::net::SocketAddr = "127.0.0.1:2701".parse().unwrap(); 
-        client_main("tester", addr, "localhost", "example_keys/ecdsa/ca.cert", "example_keys/ecdsa/client.req", "example_keys/ecdsa/client.key");
+        
+        client_main( "localhost", "example_keys/ecdsa/ca.cert", "example_keys/ecdsa/client.req", "example_keys/ecdsa/client.key");
     } else {
         // bail
         println!("[-] Please run with either `client` or `server`");

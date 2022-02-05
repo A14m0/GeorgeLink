@@ -11,6 +11,7 @@ use std::net;
 
 use rustls::server::{
     AllowAnyAuthenticatedClient,
+    AllowAnyAnonymousOrAuthenticatedClient
 };
 use rustls::{self, RootCertStore};
 
@@ -179,6 +180,7 @@ impl OpenConnection {
     /// send a Message structure to the client
     fn send_msg(&mut self, msg: Message) -> Result<(), io::Error>{
         let s_msg = serde_json::to_string(&msg)?;
+        println!("{}", s_msg);
         self.tls_conn.writer().write(&s_msg.as_bytes())?;
         Ok(())
     }
@@ -333,7 +335,7 @@ fn make_config(cert_path: &str, key_path: &str) -> Arc<rustls::ServerConfig> {
         client_auth_roots.add(&root).unwrap();
     }
     
-    let client_auth = AllowAnyAuthenticatedClient::new(client_auth_roots);
+    let client_auth = AllowAnyAnonymousOrAuthenticatedClient::new(client_auth_roots);
                                             // AllowAnyAnonymousOrAuthenticatedClient::new(client_auth_roots)
     
     

@@ -6,6 +6,7 @@ use serde::{Serialize, Deserialize};
 #[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub enum MessageType{
     Login,
+    Logout,
     Text,
     File
 }
@@ -15,5 +16,5 @@ pub enum MessageType{
 pub struct Message {
     pub user: String,
     pub mtype: MessageType,
-    pub message: Vec<u8>
+    pub message: String
 }

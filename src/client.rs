@@ -12,26 +12,65 @@ use serde::{Serialize, Deserialize};
 
 use crate::log::{log, LogType};
 use crate::common::Message;
-use crate::frontend::handle_message;
+use crate::frontend::Gui;
+use crate::console::ConsoleGUI;
+        
 
 const CLIENT: mio::Token = mio::Token(0);
 
+
+
+/// default GUI interface for when no GUI feature is present
+/// note that this is never used, and is simply here to make
+/// the rust compiler happy about structure sizes :)
+struct DefaultGUI {}
+impl Gui for DefaultGUI {
+    fn new() -> Self {DefaultGUI{}}
+    fn show(&self, msg: Message){}
+    fn get_avail(&self) -> Vec<Message>{Vec::new()}
+    fn get_addr(&self) -> String {"".to_string()}
+    fn get_uname(&self) -> String {"".to_string()}
+    fn get_disconnect(&self) -> bool {true}
+}   
+
+
+/// Our structure for not authenticating the certificate,
+/// as most of the ones we will encounter will be self-signed
+/// and so by default invalid 
+pub struct NoCertificateVerification {}
+
+impl rustls::client::ServerCertVerifier for NoCertificateVerification {
+    fn verify_server_cert(
+        &self,
+        _end_entity: &rustls::Certificate,
+        _intermediates: &[rustls::Certificate],
+        _server_name: &rustls::ServerName,
+        _scts: &mut dyn Iterator<Item = &[u8]>,
+        _ocsp: &[u8],
+        _now: std::time::SystemTime,
+    ) -> Result<rustls::client::ServerCertVerified, rustls::Error> {
+        Ok(rustls::client::ServerCertVerified::assertion())
+    }
+}
+
 /// This encapsulates the TCP-level connection, some connection
 /// state, and the underlying TLS-level session.
-struct TlsClient {
+struct TlsClient<'a> {
     socket: TcpStream,
     closing: bool,
     clean_closure: bool,
     tls_conn: rustls::ClientConnection,
     inbound: Vec<Message>,
-    outbound: Vec<Message>    
+    outbound: Vec<Message>   ,
+    gui: &'a dyn Gui 
 }
 
-impl TlsClient {
+impl TlsClient<'_> {
     fn new(
         sock: TcpStream,
         server_name: rustls::ServerName,
         cfg: Arc<rustls::ClientConfig>,
+        gui: &dyn Gui
     ) -> TlsClient {
         TlsClient {
             socket: sock,
@@ -39,19 +78,14 @@ impl TlsClient {
             clean_closure: false,
             tls_conn: rustls::ClientConnection::new(cfg, server_name).unwrap(),
             inbound: Vec::new(),
-            outbound: Vec::new()
+            outbound: Vec::new(),
+            gui
         }
     }
 
     /// Handles events sent to the TlsClient by mio::Poll
     fn ready(&mut self, ev: &mio::event::Event) {
         assert_eq!(ev.token(), CLIENT);
-
-        // handle inbound messages
-        while self.inbound.len() > 0 {
-            handle_message(self.inbound[0].clone());
-            self.inbound.remove(0);
-        }
 
         if ev.is_readable() {
             println!("Reading data");
@@ -69,11 +103,11 @@ impl TlsClient {
         }
     }
 
-    fn init_connection(&mut self, user: &str) -> Result<(), io::Error> {
+    fn init_connection(&mut self) -> Result<(), io::Error> {
         let msg = Message {
-                user: user.to_string(),
+                user: self.gui.get_uname(),
                 mtype: crate::common::MessageType::Login,
-                message: vec![0]
+                message: "".to_string()
             };
 
         self.send_msg(msg)
@@ -135,8 +169,31 @@ impl TlsClient {
                 .reader()
                 .read_exact(&mut plaintext)
                 .unwrap();
-            let msg: Message = serde_json::from_slice(&plaintext).unwrap();
-            self.inbound.push(msg);
+
+            // parse the messages
+            let plen = plaintext.len();
+            let mut msg_vec: Vec<&[u8]> = Vec::new();
+            let mut last: usize = 0;
+            for i in 0..plen {
+                if plaintext[i] == b'}' {
+                    msg_vec.push(&plaintext[last..i+1]);
+                    last = i + 1;
+                }
+            }
+            // send them to the gui
+            for m in msg_vec {
+                println!("{:?}", m);
+                let msg: Message = serde_json::from_slice(m).unwrap();
+                self.inbound.push(msg);
+            }
+            
+        }
+
+        // If we have received messages, make the backend handle it
+        if self.inbound.len() > 0 {
+            for msg in self.inbound.iter(){
+                self.gui.show(msg.clone());
+            }
         }
 
         // If wethat fails, the peer might have started a clean TLS-level
@@ -188,7 +245,7 @@ impl TlsClient {
         self.closing
     }
 }
-impl io::Write for TlsClient {
+impl io::Write for TlsClient<'_> {
     fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
         self.tls_conn.writer().write(bytes)
     }
@@ -198,7 +255,7 @@ impl io::Write for TlsClient {
     }
 }
 
-impl io::Read for TlsClient {
+impl io::Read for TlsClient<'_> {
     fn read(&mut self, bytes: &mut [u8]) -> io::Result<usize> {
         self.tls_conn.reader().read(bytes)
     }
@@ -249,7 +306,7 @@ fn make_config(ca_path: &str, certs_file: &str, key_file: &str) -> Arc<rustls::C
     let certfile = fs::File::open(&ca_path).expect("Cannot open CA file");
     let mut reader = BufReader::new(certfile);
     root_store.add_parsable_certificates(&rustls_pemfile::certs(&mut reader).unwrap());
-
+    
     /*     root_store.add_server_trust_anchors(
             webpki_roots::TLS_SERVER_ROOTS
                 .0
@@ -268,14 +325,16 @@ fn make_config(ca_path: &str, certs_file: &str, key_file: &str) -> Arc<rustls::C
     let key = load_private_key(key_file);
         
 
-    let config = rustls::ClientConfig::builder()
+    let mut config = rustls::ClientConfig::builder()
         .with_cipher_suites(&[rustls::cipher_suite::TLS13_AES_256_GCM_SHA384])
         .with_safe_default_kx_groups()
         .with_protocol_versions(&[&rustls::version::TLS13])
         .expect("inconsistent cipher-suite/versions selected")
         .with_root_certificates(root_store)
-        .with_single_cert(certs, key)
-        .expect("invalid client auth certs/key");
+        .with_no_client_auth();
+
+    config.dangerous().set_certificate_verifier(Arc::new(NoCertificateVerification {}));
+
 
 
     Arc::new(config)
@@ -283,28 +342,34 @@ fn make_config(ca_path: &str, certs_file: &str, key_file: &str) -> Arc<rustls::C
 
 /// Parse some arguments, then make a TLS client connection
 /// somewhere.
-pub fn client_main(uname: &str, addr: std::net::SocketAddr, sname: &str, ca_path: &str, certs_file: &str, key_file: &str) {
+pub fn client_main(sname: &str, ca_path: &str, certs_file: &str, key_file: &str) {
+    // generate a configuration
     let config = make_config(ca_path, certs_file, key_file);
 
-    
+    // connect to the remote server
     log(LogType::LogInfo, "Connecting...".to_string());
+    let gui = ConsoleGUI::new();
+    let addr: std::net::SocketAddr = gui.get_addr().parse().unwrap(); 
     let sock = TcpStream::connect(addr).unwrap();
     let server_name = sname
         .try_into()
         .expect("invalid DNS name");
-    let mut tlsclient = TlsClient::new(sock, server_name, config);
 
+    // set up the tls client structure
+    let mut tlsclient = TlsClient::new(sock, server_name, config, &gui);
     log(LogType::LogInfo, "Connected".to_string());
 
-    
+    // set up polling
     let mut poll = mio::Poll::new().unwrap();
     let mut events = mio::Events::with_capacity(32);
     tlsclient.register(poll.registry());
 
+    // log in to the remote
     log(LogType::LogInfo, "Logging in...".to_string());
-
-    tlsclient.init_connection(uname).unwrap();
+    tlsclient.init_connection().unwrap();
     log(LogType::LogInfo, "Logged in".to_string());
+
+    // event loop
     loop {
         poll.poll(&mut events, None).unwrap();
 
