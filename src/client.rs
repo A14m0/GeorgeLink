@@ -61,7 +61,7 @@ struct TlsClient<'a> {
     clean_closure: bool,
     tls_conn: rustls::ClientConnection,
     inbound: Vec<Message>,
-    outbound: Vec<Message>   ,
+    outbound: Vec<Message>,
     gui: &'a dyn Gui 
 }
 
@@ -81,6 +81,39 @@ impl TlsClient<'_> {
             outbound: Vec::new(),
             gui
         }
+    }
+
+    /// primary logic loop
+    fn run(&mut self) {
+        // initialize the connection with the server
+        self.init_connection().unwrap();
+
+        loop {
+            // try read
+            self.do_read();
+
+            // handle new messages
+            for m in self.inbound.iter() {
+                self.gui.show(*m);
+            }
+            self.inbound.clear();
+
+            // handle outbound messages
+            for m in self.outbound.iter() {
+                self.send_msg(*m);
+            }
+            self.outbound.clear();
+
+            // try write
+            self.do_write();
+
+            // die if we are closing
+            if self.is_closed(){
+                log(LogType::LogWarn, "Connection closed".to_string());
+                process::exit(if self.clean_closure { 0 } else { 1 });
+            }
+        }
+        
     }
 
     /// Handles events sent to the TlsClient by mio::Poll
@@ -116,7 +149,7 @@ impl TlsClient<'_> {
     fn send_msg(&mut self, msg: Message) -> Result<(), io::Error>{
         let s_msg = serde_json::to_string(&msg)?;
         self.tls_conn.writer().write(&s_msg.as_bytes())?;
-        println!("Wrote message: {:?}", msg);
+        //println!("Wrote message: {:?}", msg);
         Ok(())
     }
 
@@ -187,13 +220,6 @@ impl TlsClient<'_> {
                 self.inbound.push(msg);
             }
             
-        }
-
-        // If we have received messages, make the backend handle it
-        if self.inbound.len() > 0 {
-            for msg in self.inbound.iter(){
-                self.gui.show(msg.clone());
-            }
         }
 
         // If wethat fails, the peer might have started a clean TLS-level
