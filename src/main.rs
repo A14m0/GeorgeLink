@@ -51,7 +51,7 @@ fn main() {
         client_main( "localhost", "example_keys/ecdsa/ca.cert", "example_keys/ecdsa/client.req", "example_keys/ecdsa/client.key");
     } else {
         // bail
-        println!("[-] Please run with either `client` or `server`");
+        log(LogType::LogCrit, "[-] Please run with either `client` or `server`".to_string());
     }
 
 }

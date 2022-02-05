@@ -1,6 +1,6 @@
 use rcgen;
 
-pub fn get_cert() {
+pub fn _get_cert() {
     let cert = rcgen::generate_simple_self_signed(
         vec![
             "localhost".to_string(),

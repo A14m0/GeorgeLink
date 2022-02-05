@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use mio::net::{TcpListener, TcpStream};
-use serde::{Serialize, Deserialize};
 
 use std::collections::HashMap;
 use std::fs;
@@ -9,14 +8,11 @@ use std::io;
 use std::io::{BufReader, Read, Write};
 use std::net;
 
-use rustls::server::{
-    AllowAnyAuthenticatedClient,
-    AllowAnyAnonymousOrAuthenticatedClient
-};
+use rustls::server::AllowAnyAnonymousOrAuthenticatedClient;
 use rustls::{self, RootCertStore};
 
 use crate::log::{log, LogType};
-use crate::common::{Message, MessageType};
+use crate::common::Message;
 
 // Token for our listening socket.
 const LISTENER: mio::Token = mio::Token(0);
@@ -27,7 +23,6 @@ const LISTENER: mio::Token = mio::Token(0);
 struct TlsServer {
     server: TcpListener,
     connections: HashMap<mio::Token, OpenConnection>,
-    messages: Vec<Message>,
     next_id: usize,
     tls_config: Arc<rustls::ServerConfig>,
 }
@@ -37,7 +32,6 @@ impl TlsServer {
         TlsServer {
             server,
             connections: HashMap::new(),
-            messages: Vec::new(),
             next_id: 2,
             tls_config: cfg,
         }
@@ -94,7 +88,7 @@ impl TlsServer {
     }
 
     fn broadcast_message(&mut self, msg: Message) {
-        println!("Broadcasting message {:?}", msg);
+        println!("Broadcasting message to {} clients", self.connections.len());
         for (_,t) in self.connections.iter_mut() {
             t.send_msg(msg.clone()).unwrap();
         }
@@ -113,22 +107,6 @@ struct OpenConnection {
     closed: bool,
     tls_conn: rustls::ServerConnection,
     queue: Vec<Message>
-}
-
-
-/// This used to be conveniently exposed by mio: map EWOULDBLOCK
-/// errors to something less-errory.
-fn try_read(r: io::Result<usize>) -> io::Result<Option<usize>> {
-    match r {
-        Ok(len) => Ok(Some(len)),
-        Err(e) => {
-            if e.kind() == io::ErrorKind::WouldBlock {
-                Ok(None)
-            } else {
-                Err(e)
-            }
-        }
-    }
 }
 
 impl OpenConnection {
@@ -226,7 +204,8 @@ impl OpenConnection {
 
                 self.tls_conn
                     .reader()
-                    .read_exact(&mut buf);
+                    .read_exact(&mut buf)
+                    .unwrap();
 
                 log(LogType::LogInfo, format!("plaintext read {:?}", buf.len()));
                 self.incoming_plaintext(&buf);

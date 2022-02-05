@@ -1,5 +1,6 @@
 use std::process;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
+use std::thread::JoinHandle;
 
 use mio::net::TcpStream;
 
@@ -7,16 +8,12 @@ use std::convert::TryInto;
 use std::fs;
 use std::io;
 use std::io::{BufReader, Read, Write};
-use rustls::{OwnedTrustAnchor, RootCertStore};
-use serde::{Serialize, Deserialize};
+use rustls::{RootCertStore};
 
 use crate::log::{log, LogType};
 use crate::common::Message;
 use crate::frontend::Gui;
 use crate::console::ConsoleGUI;
-        
-
-const CLIENT: mio::Token = mio::Token(0);
 
 
 
@@ -25,12 +22,14 @@ const CLIENT: mio::Token = mio::Token(0);
 /// the rust compiler happy about structure sizes :)
 struct DefaultGUI {}
 impl Gui for DefaultGUI {
-    fn new() -> Self {DefaultGUI{}}
-    fn show(&self, msg: Message){}
+    fn new(_m: Arc<Mutex<Vec<Message>>>) -> Self {DefaultGUI{}}
+    fn start(&self) -> JoinHandle<u32>{std::thread::spawn(||0u32)}
+    fn show(&self, _msg: Message){}
     fn get_avail(&self) -> Vec<Message>{Vec::new()}
     fn get_addr(&self) -> String {"".to_string()}
     fn get_uname(&self) -> String {"".to_string()}
     fn get_disconnect(&self) -> bool {true}
+    fn terminate(&mut self){}
 }   
 
 
@@ -55,22 +54,21 @@ impl rustls::client::ServerCertVerifier for NoCertificateVerification {
 
 /// This encapsulates the TCP-level connection, some connection
 /// state, and the underlying TLS-level session.
-struct TlsClient<'a> {
+struct TlsClient {
     socket: TcpStream,
     closing: bool,
     clean_closure: bool,
     tls_conn: rustls::ClientConnection,
     inbound: Vec<Message>,
-    outbound: Vec<Message>,
-    gui: &'a dyn Gui 
+    outbound: Arc<Mutex<Vec<Message>>> 
 }
 
-impl TlsClient<'_> {
+impl TlsClient {
     fn new(
         sock: TcpStream,
         server_name: rustls::ServerName,
         cfg: Arc<rustls::ClientConfig>,
-        gui: &dyn Gui
+        outbound: Arc<Mutex<Vec<Message>>>
     ) -> TlsClient {
         TlsClient {
             socket: sock,
@@ -78,67 +76,51 @@ impl TlsClient<'_> {
             clean_closure: false,
             tls_conn: rustls::ClientConnection::new(cfg, server_name).unwrap(),
             inbound: Vec::new(),
-            outbound: Vec::new(),
-            gui
+            outbound
         }
     }
 
     /// primary logic loop
-    fn run(&mut self) {
+    fn run(&mut self, gui: &mut impl Gui) {
         // initialize the connection with the server
-        self.init_connection().unwrap();
+        self.init_connection(gui.get_uname()).unwrap();
+        let gui_handle = gui.start(); 
+        
 
         loop {
             // try read
             self.do_read();
 
             // handle new messages
+            //println!("Len: {}", self.inbound.len());
             for m in self.inbound.iter() {
-                self.gui.show(*m);
+                gui.show(m.clone());
             }
             self.inbound.clear();
 
             // handle outbound messages
-            for m in self.outbound.iter() {
-                self.send_msg(*m);
-            }
-            self.outbound.clear();
-
+            self.send_outbound().unwrap();
+            
             // try write
             self.do_write();
 
             // die if we are closing
             if self.is_closed(){
                 log(LogType::LogWarn, "Connection closed".to_string());
+                gui.terminate();
+                gui_handle.join().unwrap();
                 process::exit(if self.clean_closure { 0 } else { 1 });
             }
+
+            std::thread::sleep(std::time::Duration::from_millis(50));
         }
         
     }
 
-    /// Handles events sent to the TlsClient by mio::Poll
-    fn ready(&mut self, ev: &mio::event::Event) {
-        assert_eq!(ev.token(), CLIENT);
-
-        if ev.is_readable() {
-            println!("Reading data");
-            self.do_read();
-        }
-
-        if ev.is_writable() {
-            println!("Writing data");
-            self.do_write();
-        }
-
-        if self.is_closed() {
-            log(LogType::LogWarn, "Connection closed".to_string());
-            process::exit(if self.clean_closure { 0 } else { 1 });
-        }
-    }
-
-    fn init_connection(&mut self) -> Result<(), io::Error> {
+    /// initialize our connection with the server
+    fn init_connection(&mut self, uname: String) -> Result<(), io::Error> {
         let msg = Message {
-                user: self.gui.get_uname(),
+                user: uname,
                 mtype: crate::common::MessageType::Login,
                 message: "".to_string()
             };
@@ -153,9 +135,18 @@ impl TlsClient<'_> {
         Ok(())
     }
 
+    fn send_outbound(&mut self) -> Result<(), io::Error> {
+        let mut o_lock = self.outbound.lock().unwrap();
+        for m in o_lock.iter(){
+            let s_msg = serde_json::to_string(&m)?;
+            self.tls_conn.writer().write(&s_msg.as_bytes())?;
+        }
+        o_lock.clear();
+        Ok(())
+    }
+
     /// We're ready to do a read.
     fn do_read(&mut self) {
-        println!("Reading");
         // Read TLS data.  This fails if the underlying TCP connection
         // is broken.
         match self.tls_conn.read_tls(&mut self.socket) {
@@ -185,7 +176,7 @@ impl TlsClient<'_> {
         let io_state = match self.tls_conn.process_new_packets() {
             Ok(io_state) => io_state,
             Err(err) => {
-                println!("TLS error: {:?}", err);
+                log(LogType::LogErr, format!("TLS error: {:?}", err));
                 self.closing = true;
                 return;
             }
@@ -215,7 +206,7 @@ impl TlsClient<'_> {
             }
             // send them to the gui
             for m in msg_vec {
-                println!("{:?}", m);
+                //println!("{:?}", m);
                 let msg: Message = serde_json::from_slice(m).unwrap();
                 self.inbound.push(msg);
             }
@@ -236,42 +227,13 @@ impl TlsClient<'_> {
             .unwrap();
     }
 
-    /// Registers self as a 'listener' in mio::Registry
-    fn register(&mut self, registry: &mio::Registry) {
-        let interest = self.event_set();
-        registry
-            .register(&mut self.socket, CLIENT, interest)
-            .unwrap();
-    }
-
-    /// Reregisters self as a 'listener' in mio::Registry.
-    fn reregister(&mut self, registry: &mio::Registry) {
-        let interest = self.event_set();
-        registry
-            .reregister(&mut self.socket, CLIENT, interest)
-            .unwrap();
-    }
-
-    /// Use wants_read/wants_write to register for different mio-level
-    /// IO readiness events.
-    fn event_set(&self) -> mio::Interest {
-        let rd = self.tls_conn.wants_read();
-        let wr = self.tls_conn.wants_write();
-
-        if rd && wr {
-            mio::Interest::READABLE | mio::Interest::WRITABLE
-        } else if wr {
-            mio::Interest::WRITABLE
-        } else {
-            mio::Interest::READABLE
-        }
-    }
-
     fn is_closed(&self) -> bool {
         self.closing
     }
 }
-impl io::Write for TlsClient<'_> {
+
+
+impl io::Write for TlsClient {
     fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
         self.tls_conn.writer().write(bytes)
     }
@@ -281,7 +243,7 @@ impl io::Write for TlsClient<'_> {
     }
 }
 
-impl io::Read for TlsClient<'_> {
+impl io::Read for TlsClient {
     fn read(&mut self, bytes: &mut [u8]) -> io::Result<usize> {
         self.tls_conn.reader().read(bytes)
     }
@@ -289,7 +251,7 @@ impl io::Read for TlsClient<'_> {
 
 
 
-fn load_certs(filename: &str) -> Vec<rustls::Certificate> {
+/*fn load_certs(filename: &str) -> Vec<rustls::Certificate> {
     let certfile = fs::File::open(filename).expect("cannot open certificate file");
     let mut reader = BufReader::new(certfile);
     rustls_pemfile::certs(&mut reader)
@@ -316,7 +278,7 @@ fn load_private_key(filename: &str) -> rustls::PrivateKey {
         "no keys found in {:?} (encrypted keys not supported)",
         filename
     );
-}
+}*/
 
 /*#[cfg(feature = "dangerous_configuration")]
 fn apply_dangerous_options(args: &Args, cfg: &mut rustls::ClientConfig) {
@@ -327,7 +289,7 @@ fn apply_dangerous_options(args: &Args, cfg: &mut rustls::ClientConfig) {
 }*/
 
 /// Build a `ClientConfig` from our arguments
-fn make_config(ca_path: &str, certs_file: &str, key_file: &str) -> Arc<rustls::ClientConfig> {
+fn make_config(ca_path: &str, _certs_file: &str, _key_file: &str) -> Arc<rustls::ClientConfig> {
     let mut root_store = RootCertStore::empty();
     let certfile = fs::File::open(&ca_path).expect("Cannot open CA file");
     let mut reader = BufReader::new(certfile);
@@ -347,8 +309,8 @@ fn make_config(ca_path: &str, certs_file: &str, key_file: &str) -> Arc<rustls::C
         );*/
 
 
-    let certs = load_certs(certs_file);
-    let key = load_private_key(key_file);
+    //let certs = load_certs(certs_file);
+    //let key = load_private_key(key_file);
         
 
     let mut config = rustls::ClientConfig::builder()
@@ -374,7 +336,8 @@ pub fn client_main(sname: &str, ca_path: &str, certs_file: &str, key_file: &str)
 
     // connect to the remote server
     log(LogType::LogInfo, "Connecting...".to_string());
-    let gui = ConsoleGUI::new();
+    let shared_message: Arc<Mutex<Vec<Message>>> = Arc::new(Mutex::new(Vec::new()));
+    let mut gui = ConsoleGUI::new(shared_message.clone());
     let addr: std::net::SocketAddr = gui.get_addr().parse().unwrap(); 
     let sock = TcpStream::connect(addr).unwrap();
     let server_name = sname
@@ -382,26 +345,15 @@ pub fn client_main(sname: &str, ca_path: &str, certs_file: &str, key_file: &str)
         .expect("invalid DNS name");
 
     // set up the tls client structure
-    let mut tlsclient = TlsClient::new(sock, server_name, config, &gui);
+    let mut tlsclient = TlsClient::new(sock, server_name, config, shared_message.clone());
     log(LogType::LogInfo, "Connected".to_string());
 
     // set up polling
-    let mut poll = mio::Poll::new().unwrap();
-    let mut events = mio::Events::with_capacity(32);
-    tlsclient.register(poll.registry());
+    //let mut poll = mio::Poll::new().unwrap();
+    //let mut events = mio::Events::with_capacity(32);
+    //tlsclient.register(poll.registry());
 
     // log in to the remote
     log(LogType::LogInfo, "Logging in...".to_string());
-    tlsclient.init_connection().unwrap();
-    log(LogType::LogInfo, "Logged in".to_string());
-
-    // event loop
-    loop {
-        poll.poll(&mut events, None).unwrap();
-
-        for ev in events.iter() {
-            tlsclient.ready(ev);
-            tlsclient.reregister(poll.registry());
-        }
-    }
+    tlsclient.run(&mut gui);
 }

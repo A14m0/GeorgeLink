@@ -3,22 +3,6 @@
 version = 3
 
 [[package]]
-name = "GeorgeLink"
-version = "0.1.0"
-dependencies = [
- "cfg-if",
- "clap",
- "colored",
- "fltk",
- "mio",
- "rcgen",
- "rustls",
- "rustls-pemfile",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "atty"
 version = "0.2.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -141,6 +125,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "201d1d2d57207e8ca059aef454147b3f4e6ce209bf74fd7eb6dff404043c3713"
 dependencies = [
  "cmake",
+]
+
+[[package]]
+name = "george_link"
+version = "0.1.0"
+dependencies = [
+ "cfg-if",
+ "clap",
+ "colored",
+ "fltk",
+ "mio",
+ "rcgen",
+ "rustls",
+ "rustls-pemfile",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
