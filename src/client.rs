@@ -11,7 +11,7 @@ use std::io::{BufReader, Read, Write};
 use rustls::{RootCertStore};
 
 use crate::log::{log, LogType};
-use crate::common::Message;
+use crate::common::{Message, MessageType};
 use crate::frontend::Gui;
 use crate::console::ConsoleGUI;
 
@@ -89,19 +89,25 @@ impl TlsClient {
 
         loop {
             // try read
+            println!("Reading...");
             self.do_read();
 
             // handle new messages
             //println!("Len: {}", self.inbound.len());
+            println!("Showing msg");
             for m in self.inbound.iter() {
                 gui.show(m.clone());
             }
+            
+            println!("Clearing");
             self.inbound.clear();
 
-            // handle outbound messages
+            // handle outbound message
+            println!("send outbound");
             self.send_outbound().unwrap();
             
             // try write
+            println!("writing");
             self.do_write();
 
             // die if we are closing
@@ -111,8 +117,8 @@ impl TlsClient {
                 gui_handle.join().unwrap();
                 process::exit(if self.clean_closure { 0 } else { 1 });
             }
-
-            std::thread::sleep(std::time::Duration::from_millis(50));
+            println!("---------------------------------------------------");
+            std::thread::sleep(std::time::Duration::from_millis(1000));
         }
         
     }
@@ -152,6 +158,7 @@ impl TlsClient {
         match self.tls_conn.read_tls(&mut self.socket) {
             Err(error) => {
                 if error.kind() == io::ErrorKind::WouldBlock {
+                    println!("Blocking");
                     return;
                 }
                 println!("TLS read error: {:?}", error);
@@ -187,6 +194,7 @@ impl TlsClient {
         //
         // Read it and then write it to stdout.
         if io_state.plaintext_bytes_to_read() > 0 {
+            println!("Reading local");
             let mut plaintext = Vec::new();
             plaintext.resize(io_state.plaintext_bytes_to_read(), 0u8);
             self.tls_conn
@@ -206,11 +214,13 @@ impl TlsClient {
             }
             // send them to the gui
             for m in msg_vec {
-                //println!("{:?}", m);
+                println!("{:?}", m);
                 let msg: Message = serde_json::from_slice(m).unwrap();
                 self.inbound.push(msg);
             }
             
+        } else {
+            println!("no read plaintext");
         }
 
         // If wethat fails, the peer might have started a clean TLS-level
@@ -218,6 +228,13 @@ impl TlsClient {
         if io_state.peer_has_closed() {
             self.clean_closure = true;
             self.closing = true;
+        } else {
+            self.send_msg(Message{
+                user: "".to_string(),
+                mtype: MessageType::RespOK,
+                message: "".to_string()
+
+            }).unwrap();
         }
     }
 

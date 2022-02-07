@@ -3,10 +3,11 @@ use serde::{Serialize, Deserialize};
 
 
 /// defines our Message type
-#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq)]
 pub enum MessageType{
     Login,
     Logout,
+    RespOK,
     Text,
     File
 }

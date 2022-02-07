@@ -11,7 +11,7 @@ use std::net;
 use rustls::server::AllowAnyAnonymousOrAuthenticatedClient;
 use rustls::{self, RootCertStore};
 
-use crate::log::{log, LogType};
+use crate::{common::MessageType, log::{log, LogType}};
 use crate::common::Message;
 
 // Token for our listening socket.
@@ -76,6 +76,24 @@ impl TlsServer {
                 .unwrap()
                 .ready(registry, event);
 
+            /*
+            TODO: 
+            --------------------------------------------------------------------
+            Seems to be some confusion in the channel with overlapping messages
+            Could we flush/clear socket or smth?
+
+            Example of an offending line and corresponding log
+
+            [123, 34, 117, 115, 101, 114, 34, 58, 34, 34, 44, 34, 109, 116, 121, 112, 101, 34, 58, 34, 82, 101, 115, 112, 79, 75, 34, 44, 34, 109, 101, 115, 115, 97, 103, 101, 34, 58, 34, 34, 125, 123, 34, 117, 115, 101, 114, 34, 58, 34, 97, 97, 97, 97, 34, 44, 34, 109, 116, 121, 112, 101, 34, 58, 34, 84, 101, 120, 116, 34, 44, 34, 109, 101, 115, 115, 97, 103, 101, 34, 58, 34, 97, 34, 125]
+            [ERR]: Failed to serialize message: trailing characters at line 1 column 42
+            [WARN]: Skipping...
+
+            Could it also be in part due to a sync issue with the server?
+            Could we accidentally be flagging Mio poll events with our writes?
+
+            */
+
+
             // broadcast all messages received
             for msg in msgs.iter() {
                 self.broadcast_message(msg.clone());
@@ -89,8 +107,11 @@ impl TlsServer {
 
     fn broadcast_message(&mut self, msg: Message) {
         println!("Broadcasting message to {} clients", self.connections.len());
-        for (_,t) in self.connections.iter_mut() {
-            t.send_msg(msg.clone()).unwrap();
+        // filter out response messages
+        if msg.mtype != MessageType::RespOK {
+            for (_,t) in self.connections.iter_mut() {
+                t.send_msg(msg.clone()).unwrap();
+            }
         }
     }
 }
@@ -160,6 +181,8 @@ impl OpenConnection {
         let s_msg = serde_json::to_string(&msg)?;
         println!("{}", s_msg);
         self.tls_conn.writer().write(&s_msg.as_bytes())?;
+        println!("Wrote to client");
+        self.do_tls_read();
         Ok(())
     }
     
@@ -172,12 +195,12 @@ impl OpenConnection {
                     return;
                 }
 
-                log(LogType::LogErr, format!("read error {:?}", err));
+                log(LogType::LogErr, format!("Read error {:?}", err));
                 self.closing = true;
                 return;
             }
             Ok(0) => {
-                log(LogType::LogWarn, "eof".to_string());
+                log(LogType::LogWarn, "Client disconnect".to_string());
                 self.closing = true;
                 return;
             }
@@ -209,9 +232,16 @@ impl OpenConnection {
 
                 log(LogType::LogInfo, format!("plaintext read {:?}", buf.len()));
                 self.incoming_plaintext(&buf);
+                println!("{:?}", buf);
 
                 // deserialize the message
-                self.queue.push(serde_json::from_slice(&buf.clone()).unwrap());
+                match serde_json::from_slice(&buf.clone()) {
+                    Ok(a) => self.queue.push(a),
+                    Err(e) => {
+                        log(LogType::LogErr, format!("Failed to serialize message: {}", e));
+                        log(LogType::LogWarn, "Skipping...".to_string());
+                    }
+                }
             }
         }
     }
