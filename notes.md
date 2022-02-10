@@ -25,3 +25,8 @@ There will be two types of messages: text messages (`TEXT`) and file messages (`
 # Planned features
 1. file upload limit disregard 
     -> server negotiates the p2p sharing of a file
+
+
+
+# Todos:
+1. Client should be driven by the GUI, not the other way around

@@ -7,7 +7,6 @@ edition = "2021"
 
 [dependencies]
 cfg-if = "1.0.0"
-fltk = "1.2.29"
 clap = {version="3.0.14", features=["cargo"]}
 rustls = {version="0.20.2", features=["dangerous_configuration"]}
 rustls-pemfile = "0.2.1"
@@ -16,6 +15,10 @@ rcgen = "0.9.0"
 serde = {version = "1.0.136", features = ["derive"]}
 serde_json = "1.0.78"
 mio = { version = "0.8", features = ["net", "os-poll"] }
+
+# client interface dependencies
+cursive = {version="0.17", default-features=false, features=["crossterm-backend"]}
+fltk = "1.2.29"
 
 
 [features]

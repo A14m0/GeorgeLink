@@ -81,13 +81,11 @@ impl TlsClient {
     }
 
     /// primary logic loop
-    fn run(&mut self, gui: &mut impl Gui) {
+    fn cycle(&mut self, uname: String) {
         // initialize the connection with the server
-        self.init_connection(gui.get_uname()).unwrap();
-        let gui_handle = gui.start(); 
+        self.init_connection(uname).unwrap();
         
 
-        loop {
             // try read
             println!("Reading...");
             self.do_read();
@@ -96,7 +94,7 @@ impl TlsClient {
             //println!("Len: {}", self.inbound.len());
             println!("Showing msg");
             for m in self.inbound.iter() {
-                gui.show(m.clone());
+                //gui.show(m.clone());
             }
             
             println!("Clearing");
@@ -113,13 +111,12 @@ impl TlsClient {
             // die if we are closing
             if self.is_closed(){
                 log(LogType::LogWarn, "Connection closed".to_string());
-                gui.terminate();
-                gui_handle.join().unwrap();
+                //gui.terminate();
+                //gui_handle.join().unwrap();
                 process::exit(if self.clean_closure { 0 } else { 1 });
             }
             println!("---------------------------------------------------");
             std::thread::sleep(std::time::Duration::from_millis(1000));
-        }
         
     }
 
@@ -372,5 +369,5 @@ pub fn client_main(sname: &str, ca_path: &str, certs_file: &str, key_file: &str)
 
     // log in to the remote
     log(LogType::LogInfo, "Logging in...".to_string());
-    tlsclient.run(&mut gui);
+    //tlsclient.cycle();
 }
