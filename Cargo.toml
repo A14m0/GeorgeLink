@@ -17,7 +17,7 @@ serde_json = "1.0.78"
 mio = { version = "0.8", features = ["net", "os-poll"] }
 
 # client interface dependencies
-cursive = {version="0.17", default-features=false, features=["crossterm-backend"]}
+cursive = {version="0.17", default-features=false, features=["crossterm-backend", "toml"]}
 fltk = "1.2.29"
 
 

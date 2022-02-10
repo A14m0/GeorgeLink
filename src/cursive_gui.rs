@@ -23,7 +23,6 @@ pub fn gui_main() {
 
     siv.load_toml(include_str!("assets/style.toml")).unwrap();
     
-
     let cb_sink = siv.cb_sink().clone();
 
     // We want to refresh the page even when no input is given.
