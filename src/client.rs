@@ -13,24 +13,7 @@ use rustls::{RootCertStore};
 use crate::log::{log, LogType};
 use crate::common::{Message, MessageType};
 use crate::frontend::Gui;
-use crate::console::ConsoleGUI;
 
-
-
-/// default GUI interface for when no GUI feature is present
-/// note that this is never used, and is simply here to make
-/// the rust compiler happy about structure sizes :)
-struct DefaultGUI {}
-impl Gui for DefaultGUI {
-    fn new(_m: Arc<Mutex<Vec<Message>>>) -> Self {DefaultGUI{}}
-    fn start(&self) -> JoinHandle<u32>{std::thread::spawn(||0u32)}
-    fn show(&self, _msg: Message){}
-    fn get_avail(&self) -> Vec<Message>{Vec::new()}
-    fn get_addr(&self) -> String {"".to_string()}
-    fn get_uname(&self) -> String {"".to_string()}
-    fn get_disconnect(&self) -> bool {true}
-    fn terminate(&mut self){}
-}   
 
 
 /// Our structure for not authenticating the certificate,
@@ -54,7 +37,7 @@ impl rustls::client::ServerCertVerifier for NoCertificateVerification {
 
 /// This encapsulates the TCP-level connection, some connection
 /// state, and the underlying TLS-level session.
-struct TlsClient {
+pub struct TlsClient {
     socket: TcpStream,
     closing: bool,
     clean_closure: bool,
@@ -344,30 +327,18 @@ fn make_config(ca_path: &str, _certs_file: &str, _key_file: &str) -> Arc<rustls:
 
 /// Parse some arguments, then make a TLS client connection
 /// somewhere.
-pub fn client_main(sname: &str, ca_path: &str, certs_file: &str, key_file: &str) {
+pub fn build_client(sname: &str, ca_path: &str, certs_file: &str, key_file: &str, addr: &str) -> TlsClient{
     // generate a configuration
     let config = make_config(ca_path, certs_file, key_file);
 
     // connect to the remote server
     log(LogType::LogInfo, "Connecting...".to_string());
     let shared_message: Arc<Mutex<Vec<Message>>> = Arc::new(Mutex::new(Vec::new()));
-    let mut gui = ConsoleGUI::new(shared_message.clone());
-    let addr: std::net::SocketAddr = gui.get_addr().parse().unwrap(); 
-    let sock = TcpStream::connect(addr).unwrap();
+    let sock = TcpStream::connect(addr.parse().unwrap()).unwrap();
     let server_name = sname
         .try_into()
         .expect("invalid DNS name");
 
     // set up the tls client structure
-    let mut tlsclient = TlsClient::new(sock, server_name, config, shared_message.clone());
-    log(LogType::LogInfo, "Connected".to_string());
-
-    // set up polling
-    //let mut poll = mio::Poll::new().unwrap();
-    //let mut events = mio::Events::with_capacity(32);
-    //tlsclient.register(poll.registry());
-
-    // log in to the remote
-    log(LogType::LogInfo, "Logging in...".to_string());
-    //tlsclient.cycle();
+    TlsClient::new(sock, server_name, config, shared_message.clone())
 }

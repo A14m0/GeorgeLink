@@ -6,12 +6,11 @@ mod client;
 mod common;
 mod log;
 mod frontend;
-mod console;
 
 mod cursive_gui;
 
 use server::server_main;
-use client::client_main;
+use frontend::determine_gui;
 use log::{LogType, log};
 
 
@@ -49,8 +48,7 @@ fn main() {
         
     } else if args.is_present("client") {
         // run the client
-        cursive_gui::gui_main();
-        //client_main( "localhost", "example_keys/ecdsa/ca.cert", "example_keys/ecdsa/client.req", "example_keys/ecdsa/client.key");
+        determine_gui();
     } else {
         // bail
         log(LogType::LogCrit, "[-] Please run with either `client` or `server`".to_string());
