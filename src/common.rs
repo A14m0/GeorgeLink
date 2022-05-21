@@ -19,3 +19,7 @@ pub struct Message {
     pub mtype: MessageType,
     pub message: String
 }
+
+impl From<&Message> for std::string::String {
+    fn from(a: &Message) -> Self { serde_json::to_string(a).unwrap() }
+}

@@ -43,7 +43,7 @@ pub struct TlsClient {
     clean_closure: bool,
     tls_conn: rustls::ClientConnection,
     inbound: Vec<Message>,
-    outbound: Arc<Mutex<Vec<Message>>> 
+    outbound: Vec<Message> 
 }
 
 impl TlsClient {
@@ -51,7 +51,7 @@ impl TlsClient {
         sock: TcpStream,
         server_name: rustls::ServerName,
         cfg: Arc<rustls::ClientConfig>,
-        outbound: Arc<Mutex<Vec<Message>>>
+        outbound: Vec<Message>
     ) -> TlsClient {
         TlsClient {
             socket: sock,
@@ -70,25 +70,25 @@ impl TlsClient {
         
 
             // try read
-            println!("Reading...");
+            //println!("Reading...");
             self.do_read();
 
             // handle new messages
             //println!("Len: {}", self.inbound.len());
-            println!("Showing msg");
+            //println!("Showing msg");
             for m in self.inbound.iter() {
                 //gui.show(m.clone());
             }
             
-            println!("Clearing");
+            //println!("Clearing");
             self.inbound.clear();
 
             // handle outbound message
-            println!("send outbound");
+            //println!("send outbound");
             self.send_outbound().unwrap();
             
             // try write
-            println!("writing");
+            //println!("writing");
             self.do_write();
 
             // die if we are closing
@@ -98,13 +98,13 @@ impl TlsClient {
                 //gui_handle.join().unwrap();
                 process::exit(if self.clean_closure { 0 } else { 1 });
             }
-            println!("---------------------------------------------------");
+            //println!("---------------------------------------------------");
             std::thread::sleep(std::time::Duration::from_millis(1000));
         
     }
 
     /// initialize our connection with the server
-    fn init_connection(&mut self, uname: String) -> Result<(), io::Error> {
+    pub fn init_connection(&mut self, uname: String) -> Result<(), io::Error> {
         let msg = Message {
                 user: uname,
                 mtype: crate::common::MessageType::Login,
@@ -121,34 +121,32 @@ impl TlsClient {
         Ok(())
     }
 
-    fn send_outbound(&mut self) -> Result<(), io::Error> {
-        let mut o_lock = self.outbound.lock().unwrap();
-        for m in o_lock.iter(){
+    pub fn send_outbound(&mut self) -> Result<(), io::Error> {
+        for m in self.outbound.iter(){
             let s_msg = serde_json::to_string(&m)?;
             self.tls_conn.writer().write(&s_msg.as_bytes())?;
         }
-        o_lock.clear();
+        self.outbound.clear();
         Ok(())
     }
 
     /// We're ready to do a read.
-    fn do_read(&mut self) {
+    pub fn do_read(&mut self) {
         // Read TLS data.  This fails if the underlying TCP connection
         // is broken.
         match self.tls_conn.read_tls(&mut self.socket) {
             Err(error) => {
                 if error.kind() == io::ErrorKind::WouldBlock {
-                    println!("Blocking");
                     return;
                 }
-                println!("TLS read error: {:?}", error);
+                //println!("TLS read error: {:?}", error);
                 self.closing = true;
                 return;
             }
 
             // If we're ready but there's no data: EOF.
             Ok(0) => {
-                println!("EOF");
+                //println!("EOF");
                 self.closing = true;
                 self.clean_closure = true;
                 return;
@@ -174,7 +172,7 @@ impl TlsClient {
         //
         // Read it and then write it to stdout.
         if io_state.plaintext_bytes_to_read() > 0 {
-            println!("Reading local");
+            //println!("Reading local");
             let mut plaintext = Vec::new();
             plaintext.resize(io_state.plaintext_bytes_to_read(), 0u8);
             self.tls_conn
@@ -194,13 +192,13 @@ impl TlsClient {
             }
             // send them to the gui
             for m in msg_vec {
-                println!("{:?}", m);
+                //println!("{:?}", m);
                 let msg: Message = serde_json::from_slice(m).unwrap();
                 self.inbound.push(msg);
             }
             
         } else {
-            println!("no read plaintext");
+            //println!("no read plaintext");
         }
 
         // If wethat fails, the peer might have started a clean TLS-level
@@ -218,14 +216,26 @@ impl TlsClient {
         }
     }
 
-    fn do_write(&mut self) {
+    pub fn do_write(&mut self) {
         self.tls_conn
             .write_tls(&mut self.socket)
             .unwrap();
     }
 
-    fn is_closed(&self) -> bool {
+    pub fn is_closed(&self) -> bool {
         self.closing
+    }
+
+    pub fn get_inbound(&self) -> Vec<Message> {
+        self.inbound.clone()
+    }
+
+    pub fn clear_inbound(&mut self) {
+        self.inbound.clear()
+    }
+
+    pub fn add_outbound(&mut self, m: Message) {
+        self.outbound.push(m);
     }
 }
 
@@ -333,12 +343,12 @@ pub fn build_client(sname: &str, ca_path: &str, certs_file: &str, key_file: &str
 
     // connect to the remote server
     log(LogType::LogInfo, "Connecting...".to_string());
-    let shared_message: Arc<Mutex<Vec<Message>>> = Arc::new(Mutex::new(Vec::new()));
+    let shared_message: Vec<Message> = Vec::new();
     let sock = TcpStream::connect(addr.parse().unwrap()).unwrap();
     let server_name = sname
         .try_into()
         .expect("invalid DNS name");
 
     // set up the tls client structure
-    TlsClient::new(sock, server_name, config, shared_message.clone())
+    TlsClient::new(sock, server_name, config, shared_message)
 }
