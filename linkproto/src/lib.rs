@@ -1,4 +1,5 @@
 use serde::{Serialize, Deserialize};
+use rcgen;
 
 
 
@@ -22,4 +23,19 @@ pub struct Message {
 
 impl From<&Message> for std::string::String {
     fn from(a: &Message) -> Self { serde_json::to_string(a).unwrap() }
+}
+
+
+
+/// Generates a simple self-signed TLS certificate
+pub fn _get_cert() {
+    let cert = rcgen::generate_simple_self_signed(
+        vec![
+            "localhost".to_string(),
+            "example.world".to_string()
+        ]
+    ).unwrap();
+
+    println!("{}", cert.serialize_pem().unwrap());
+    println!("{}", cert.serialize_private_key_pem());
 }

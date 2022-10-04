@@ -1,0 +1,1 @@
+/home/morpheus/src/repos/BingoChado/GeorgeLink/client/target/debug/client: /home/morpheus/src/repos/BingoChado/GeorgeLink/client/src/main.rs /home/morpheus/src/repos/BingoChado/GeorgeLink/linkproto/src/lib.rs

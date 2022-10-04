@@ -375,7 +375,7 @@ fn make_config(cert_path: &str, key_path: &str) -> Arc<rustls::ServerConfig> {
     Arc::new(config)
 }
 
-pub fn server_main() {
+fn main() {
     let addr: net::SocketAddr = "127.0.0.1:2701".parse().unwrap();
     
     let config = make_config("example_keys/ecdsa/ca.cert", "example_keys/ecdsa/ca.key");
