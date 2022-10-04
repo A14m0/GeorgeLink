@@ -1,0 +1,9 @@
+/home/morpheus/src/repos/BingoChado/GeorgeLink/client/target/debug/deps/unicode_segmentation-880cf990fa8640bc.rmeta: /home/morpheus/.cargo/registry/src/github.com-1ecc6299db9ec823/unicode-segmentation-1.10.0/src/lib.rs /home/morpheus/.cargo/registry/src/github.com-1ecc6299db9ec823/unicode-segmentation-1.10.0/src/grapheme.rs /home/morpheus/.cargo/registry/src/github.com-1ecc6299db9ec823/unicode-segmentation-1.10.0/src/sentence.rs /home/morpheus/.cargo/registry/src/github.com-1ecc6299db9ec823/unicode-segmentation-1.10.0/src/word.rs /home/morpheus/.cargo/registry/src/github.com-1ecc6299db9ec823/unicode-segmentation-1.10.0/src/tables.rs
+
+/home/morpheus/src/repos/BingoChado/GeorgeLink/client/target/debug/deps/unicode_segmentation-880cf990fa8640bc.d: /home/morpheus/.cargo/registry/src/github.com-1ecc6299db9ec823/unicode-segmentation-1.10.0/src/lib.rs /home/morpheus/.cargo/registry/src/github.com-1ecc6299db9ec823/unicode-segmentation-1.10.0/src/grapheme.rs /home/morpheus/.cargo/registry/src/github.com-1ecc6299db9ec823/unicode-segmentation-1.10.0/src/sentence.rs /home/morpheus/.cargo/registry/src/github.com-1ecc6299db9ec823/unicode-segmentation-1.10.0/src/word.rs /home/morpheus/.cargo/registry/src/github.com-1ecc6299db9ec823/unicode-segmentation-1.10.0/src/tables.rs
+
+/home/morpheus/.cargo/registry/src/github.com-1ecc6299db9ec823/unicode-segmentation-1.10.0/src/lib.rs:
+/home/morpheus/.cargo/registry/src/github.com-1ecc6299db9ec823/unicode-segmentation-1.10.0/src/grapheme.rs:
+/home/morpheus/.cargo/registry/src/github.com-1ecc6299db9ec823/unicode-segmentation-1.10.0/src/sentence.rs:
+/home/morpheus/.cargo/registry/src/github.com-1ecc6299db9ec823/unicode-segmentation-1.10.0/src/word.rs:
+/home/morpheus/.cargo/registry/src/github.com-1ecc6299db9ec823/unicode-segmentation-1.10.0/src/tables.rs:
