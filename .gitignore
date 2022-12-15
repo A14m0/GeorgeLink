@@ -1,5 +1,5 @@
-# ignore Rust build outputs
-/target
-
 # ignore example key directory
 /example_keys
+
+# ignore build targets
+**/target
